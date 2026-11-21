@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bolão do Major | PGL Major Singapore 2026</title>
+    <meta name="description" content="Bolão de Pick'em do PGL Major Singapore 2026: faça seus palpites, crie um grupo com os amigos e acompanhe o ranking.">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+    <script src="bolao_config.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            /* Mesma paleta da página de predições: vermelho da bandeira, ouro, jade, orquídea */
+            --primary: #EF3340;
+            --secondary: #FFB84D;
+            --accent: #35E0C8;
+            --orchid: #E056A0;
+            --dark: #0B0A12;
+            --panel: #17151F;
+            --panel-2: #1F1C2A;
+            --line: rgba(255, 255, 255, 0.08);
+            --success: #3DDC97;
+            --danger: #FF5468;
+            --text: #F1EEF0;
+            --muted: #A39FAB;
+            color-scheme: dark;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--dark);
+            color: var(--text);
+            line-height: 1.5;
+            min-height: 100vh;
+        }
+
+        h1, h2, h3 { font-family: 'Rajdhani', 'Inter', sans-serif; font-weight: 700; letter-spacing: 0.5px; }
+        button, input, select { font: inherit; color: inherit; }
+        [hidden] { display: none !important; }
+        a { color: var(--accent); }
+
+        .wrap { max-width: 980px; margin: 0 auto; padding: 0 16px; }
+
+        /* ---------- topo ---------- */
+        .top {
+            background:
+                radial-gradient(circle at 12% 0%, rgba(239, 51, 64, 0.28) 0%, transparent 55%),
+                radial-gradient(circle at 90% 100%, rgba(53, 224, 200, 0.12) 0%, transparent 50%),
+                linear-gradient(160deg, #1B0A12 0%, #120F1C 70%);
+            border-bottom: 1px solid var(--line);
+            padding: 26px 0 22px;
+        }
+        .top-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+        .emblem { width: 56px; height: 45px; flex: none; }
+        .top-title { flex: 1; min-width: 220px; }
+        .eyebrow {
+            font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 0.8rem;
+            letter-spacing: 4px; text-transform: uppercase; color: var(--secondary);
+        }
+        .top h1 { font-size: clamp(1.7rem, 5vw, 2.4rem); line-height: 1.1; }
+        .stage-name { color: var(--muted); font-size: 0.95rem; }
+
+        .account { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; flex-wrap: wrap; }
+        .account-name { font-weight: 700; }
+
+        .lockbar {
+            margin-top: 18px; display: flex; gap: 10px 22px; flex-wrap: wrap; align-items: baseline;
+            font-size: 0.92rem; color: var(--muted);
+        }
+        .lockbar strong { color: var(--text); font-variant-numeric: tabular-nums; }
+        .lock-pill {
+            font-size: 0.75rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+            padding: 3px 10px; border-radius: 999px; border: 1px solid;
+        }
+        .lock-pill.open { color: var(--success); border-color: rgba(61, 220, 151, 0.5); background: rgba(61, 220, 151, 0.1); }
+        .lock-pill.closed { color: var(--secondary); border-color: rgba(255, 184, 77, 0.5); background: rgba(255, 184, 77, 0.1); }
+
+        /* ---------- elementos comuns ---------- */
+        main { padding: 24px 0 60px; }
+        .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px; }
+        .panel + .panel { margin-top: 18px; }
+        .panel h2 { font-size: 1.45rem; margin-bottom: 4px; }
+        .hint { color: var(--muted); font-size: 0.9rem; }
+
+        .btn {
+            border: 1px solid var(--line); background: var(--panel-2); border-radius: 9px;
+            padding: 9px 16px; font-weight: 600; cursor: pointer; transition: background 0.15s, border-color 0.15s;
+        }
+        .btn:hover:not(:disabled) { border-color: rgba(255, 255, 255, 0.25); }
+        .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        .btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+        .btn.primary:hover:not(:disabled) { background: #f4505b; }
+        .btn.small { padding: 5px 11px; font-size: 0.82rem; }
+        .btn.ghost { background: transparent; }
+        .btn.danger { color: var(--danger); }
+        :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+        label.field { display: block; font-size: 0.85rem; color: var(--muted); font-weight: 600; }
+        .input {
+            display: block; width: 100%; margin-top: 5px; padding: 10px 12px; border-radius: 9px;
+            background: var(--dark); border: 1px solid var(--line); color: var(--text);
+        }
+        .input:focus { border-color: var(--accent); outline: none; }
+
+        .msg { margin: 12px 0; font-size: 0.9rem; padding: 9px 12px; border-radius: 9px; }
+        .msg.error { background: rgba(255, 84, 104, 0.12); color: #ff9aa6; border: 1px solid rgba(255, 84, 104, 0.35); }
+        .msg.ok { background: rgba(61, 220, 151, 0.1); color: var(--success); border: 1px solid rgba(61, 220, 151, 0.35); }
+
+        /* ---------- login ---------- */
+        .auth { max-width: 430px; margin: 10px auto 0; }
+        .auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 14px 0 18px; }
+        .auth form { display: grid; gap: 14px; }
+        .linklike { background: none; border: none; color: var(--accent); cursor: pointer; text-decoration: underline; font-size: 0.88rem; padding: 0; }
+
+        /* ---------- abas ---------- */
+        .tabs { display: flex; gap: 6px; margin-bottom: 18px; flex-wrap: wrap; }
+        .tab {
+            border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 8px 18px;
+            font-weight: 600; cursor: pointer; color: var(--muted);
+        }
+        .tab[aria-selected="true"] { background: var(--text); color: var(--dark); border-color: var(--text); }
+
+        /* ---------- palpites ---------- */
+        .counters { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0; align-items: center; }
+        .counter {
+            font-size: 0.85rem; font-weight: 700; padding: 5px 12px; border-radius: 999px;
+            border: 1px solid var(--line); font-variant-numeric: tabular-nums; color: var(--muted);
+        }
+        .counter.full { color: var(--dark); }
+        .counter.c30.full { background: var(--secondary); border-color: var(--secondary); }
+        .counter.cadv.full { background: var(--accent); border-color: var(--accent); }
+        .counter.c03.full { background: var(--orchid); border-color: var(--orchid); }
+        .counters .spacer { flex: 1; }
+
+        .teams { display: grid; gap: 6px; }
+        .team {
+            display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 10px; align-items: center;
+            background: var(--panel-2); border: 1px solid transparent; border-radius: 10px; padding: 8px 10px;
+        }
+        .team.sel-30 { border-color: rgba(255, 184, 77, 0.6); }
+        .team.sel-adv { border-color: rgba(53, 224, 200, 0.55); }
+        .team.sel-03 { border-color: rgba(224, 86, 160, 0.6); }
+        .seed { color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; text-align: right; }
+        .team-name { font-weight: 600; overflow-wrap: anywhere; }
+        .team-rec { color: var(--muted); font-size: 0.8rem; font-weight: 500; margin-left: 6px; font-variant-numeric: tabular-nums; }
+        .seg { display: flex; gap: 4px; }
+        .seg button {
+            border: 1px solid var(--line); background: var(--dark); border-radius: 7px; padding: 6px 10px;
+            font-size: 0.82rem; font-weight: 700; cursor: pointer; color: var(--muted); min-width: 46px;
+        }
+        .seg button:disabled { cursor: default; opacity: 0.5; }
+        .seg button[aria-pressed="true"] { color: var(--dark); opacity: 1; }
+        .seg .b30[aria-pressed="true"] { background: var(--secondary); border-color: var(--secondary); }
+        .seg .badv[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); }
+        .seg .b03[aria-pressed="true"] { background: var(--orchid); border-color: var(--orchid); }
+
+        /* ---------- grupos ---------- */
+        .group-forms { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-top: 14px; }
+        .inline-form { display: flex; gap: 8px; align-items: flex-end; }
+        .inline-form label { flex: 1; min-width: 0; }
+        .group-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 14px 0 4px; }
+        .invite {
+            display: flex; gap: 10px 16px; flex-wrap: wrap; align-items: center; margin: 12px 0 16px;
+            padding: 12px 14px; border-radius: 10px; background: var(--panel-2); font-size: 0.9rem;
+        }
+        .invite code {
+            font-family: ui-monospace, 'SF Mono', Consolas, monospace; font-size: 1.05rem; font-weight: 700;
+            letter-spacing: 2px; color: var(--secondary);
+        }
+        .invite .spacer { flex: 1; }
+
+        .board-wrap { overflow-x: auto; }
+        table.board { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+        .board th {
+            text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 1px;
+            color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap;
+        }
+        .board td { padding: 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+        .board .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .board .pts { font-family: 'Rajdhani', sans-serif; font-size: 1.35rem; font-weight: 700; line-height: 1; }
+        .board tr.me td { background: rgba(53, 224, 200, 0.06); }
+        .board tr.model td { color: var(--muted); }
+        .who { font-weight: 700; overflow-wrap: anywhere; min-width: 110px; }
+        .tag {
+            display: inline-block; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;
+            padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); margin-left: 6px;
+            vertical-align: middle;
+        }
+        .chips { display: flex; flex-wrap: wrap; gap: 4px; min-width: 240px; }
+        .chip {
+            font-size: 0.76rem; font-weight: 600; padding: 2px 8px; border-radius: 6px;
+            border: 1px solid var(--line); white-space: nowrap;
+        }
+        .chip .k { opacity: 0.7; font-weight: 700; margin-right: 4px; }
+        .chip.hit { background: rgba(61, 220, 151, 0.16); border-color: rgba(61, 220, 151, 0.5); color: var(--success); }
+        .chip.miss { color: var(--muted); text-decoration: line-through; opacity: 0.65; }
+        .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 12px; font-size: 0.8rem; color: var(--muted); }
+
+        /* ---------- admin ---------- */
+        .admin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 6px; margin: 14px 0; }
+        .admin-row {
+            display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; align-items: center;
+            background: var(--panel-2); border-radius: 9px; padding: 6px 10px; font-size: 0.9rem; font-weight: 600;
+        }
+        .admin-row select { background: var(--dark); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
+
+        footer { text-align: center; color: var(--muted); font-size: 0.85rem; padding: 0 16px 40px; margin-top: -30px; }
+
+        @media (max-width: 520px) {
+            .panel { padding: 16px; }
+            .team { grid-template-columns: 22px minmax(0, 1fr); }
+            .team .seg { grid-column: 1 / -1; }
+            .team .seg button { flex: 1; }
+        }
+    </style>
+</head>
+<body>
+    <header class="top">
+        <div class="wrap">
+            <div class="top-row">
+                <svg class="emblem" viewBox="0 0 100 80" aria-hidden="true">
+                    <defs>
+                        <mask id="crescent"><rect width="100" height="80" fill="black"/><circle cx="34" cy="40" r="28" fill="white"/><circle cx="45" cy="40" r="25" fill="black"/></mask>
+                        <polygon id="sgstar" points="0,-10 2.9,-3.1 9.5,-3.1 3.8,1.2 5.9,8.1 0,4 -5.9,8.1 -3.8,1.2 -9.5,-3.1 -2.9,-3.1"/>
+                    </defs>
+                    <rect width="100" height="80" fill="white" mask="url(#crescent)"/>
+                    <g fill="white">
+                        <use href="#sgstar" transform="translate(60,23) scale(0.6)"/>
+                        <use href="#sgstar" transform="translate(76,35) scale(0.6)"/>
+                        <use href="#sgstar" transform="translate(70,53) scale(0.6)"/>
+                        <use href="#sgstar" transform="translate(50,53) scale(0.6)"/>
+                        <use href="#sgstar" transform="translate(44,35) scale(0.6)"/>
+                    </g>
+                </svg>
+                <div class="top-title">
+                    <div class="eyebrow">Pick'em entre amigos</div>
+                    <h1>Bolão do Major</h1>
+                    <div class="stage-name" id="stageName">PGL Major Singapore 2026</div>
+                </div>
+                <div class="account" id="account" hidden>
+                    <span>Olá, <span class="account-name" id="accountName"></span></span>
+                    <button class="btn small ghost" id="btnRename" type="button">Trocar nome</button>
+                    <button class="btn small ghost" id="btnLogout" type="button">Sair</button>
+                </div>
+            </div>
+            <div class="lockbar" id="lockbar" hidden>
+                <span class="lock-pill" id="lockPill"></span>
+                <span id="lockText"></span>
+                <a id="predLink" href="#">Ver as predições do modelo</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="wrap">
+        <!-- Site ainda não configurado -->
+        <section class="panel" id="viewSetup" hidden>
+            <h2>Falta conectar o banco de dados</h2>
+            <p class="hint">O arquivo <code>bolao_config.js</code> ainda não tem a URL e a chave pública do Supabase.</p>
+        </section>
+
+        <section class="panel" id="viewError" hidden>
+            <h2>Não foi possível carregar o bolão</h2>
+            <p class="hint" id="errorText"></p>
+        </section>
+
+        <!-- Login / cadastro -->
+        <section class="panel auth" id="viewAuth" hidden>
+            <h2 id="authTitle">Entre para palpitar</h2>
+            <p class="hint" id="authHint">Escolha 2 times que fazem 3-0, 2 que fazem 0-3 e 6 que avançam. Depois é só disputar com os amigos.</p>
+            <div class="auth-tabs" id="authTabs">
+                <button class="tab" type="button" id="tabSignup" aria-selected="true">Criar conta</button>
+                <button class="tab" type="button" id="tabLogin" aria-selected="false">Já tenho conta</button>
+            </div>
+            <form id="authForm" novalidate>
+                <label class="field" id="fieldName">Seu nome no ranking
+                    <input class="input" id="inName" type="text" maxlength="24" autocomplete="nickname" placeholder="Como os amigos te conhecem">
+                </label>
+                <label class="field" id="fieldEmail">E-mail
+                    <input class="input" id="inEmail" type="email" autocomplete="email" placeholder="voce@exemplo.com">
+                </label>
+                <label class="field" id="fieldPass">Senha
+                    <input class="input" id="inPass" type="password" autocomplete="current-password" placeholder="Mínimo de 6 caracteres">
+                </label>
+                <button class="btn primary" type="submit" id="authSubmit">Criar conta</button>
+                <button class="linklike" type="button" id="btnForgot" hidden>Esqueci a senha</button>
+            </form>
+            <div class="msg" id="authMsg" hidden></div>
+        </section>
+
+        <!-- App -->
+        <div id="viewApp" hidden>
+            <div class="tabs" role="tablist">
+                <button class="tab" type="button" data-tab="picks" aria-selected="true">Meus palpites</button>
+                <button class="tab" type="button" data-tab="groups" aria-selected="false">Grupos e ranking</button>
+                <button class="tab" type="button" data-tab="admin" aria-selected="false" id="tabAdmin" hidden>Resultados</button>
+            </div>
+
+            <!-- Palpites -->
+            <section class="panel" id="panelPicks">
+                <h2>Meus palpites</h2>
+                <p class="hint" id="picksHint"></p>
+                <div class="counters">
+                    <span class="counter c30" id="count30"></span>
+                    <span class="counter cadv" id="countAdv"></span>
+                    <span class="counter c03" id="count03"></span>
+                    <span class="spacer"></span>
+                    <button class="btn primary" type="button" id="btnSave">Salvar palpite</button>
+                </div>
+                <div class="msg" id="picksMsg" hidden></div>
+                <div class="teams" id="teams"></div>
+            </section>
+
+            <!-- Grupos -->
+            <section id="panelGroups" hidden>
+                <div class="panel">
+                    <h2>Grupos</h2>
+                    <p class="hint">Crie um grupo e mande o link de convite, ou entre com o código que um amigo te passou. Você pode participar de vários.</p>
+                    <div class="group-forms">
+                        <form class="inline-form" id="formCreate" novalidate>
+                            <label class="field">Novo grupo
+                                <input class="input" id="inGroupName" type="text" maxlength="40" placeholder="Nome do grupo">
+                            </label>
+                            <button class="btn" type="submit">Criar</button>
+                        </form>
+                        <form class="inline-form" id="formJoin" novalidate>
+                            <label class="field">Entrar com código
+                                <input class="input" id="inCode" type="text" maxlength="12" placeholder="Ex.: A1B2C3D4" autocapitalize="characters">
+                            </label>
+                            <button class="btn" type="submit">Entrar</button>
+                        </form>
+                    </div>
+                    <div class="msg" id="groupsMsg" hidden></div>
+                </div>
+
+                <div class="panel" id="boardPanel" hidden>
+                    <h2>Ranking</h2>
+                    <div class="group-chips" id="groupChips"></div>
+                    <div class="invite">
+                        <span>Código de convite: <code id="inviteCode"></code></span>
+                        <button class="btn small" type="button" id="btnCopy">Copiar link de convite</button>
+                        <span class="spacer"></span>
+                        <button class="btn small ghost danger" type="button" id="btnLeave">Sair do grupo</button>
+                    </div>
+                    <p class="hint" id="boardHint"></p>
+                    <div class="board-wrap">
+                        <table class="board">
+                            <thead id="boardHead"></thead>
+                            <tbody id="boardBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="legend" id="boardLegend" hidden>
+                        <span><span class="chip hit">acertou</span></span>
+                        <span><span class="chip">em aberto</span></span>
+                        <span><span class="chip miss">errou</span></span>
+                        <span>Desempate: mais picks ainda vivos, depois quem salvou o palpite primeiro.</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Admin -->
+            <section class="panel" id="panelAdmin" hidden>
+                <h2>Resultados do stage</h2>
+                <p class="hint">Só você vê esta aba. Atualize vitórias e derrotas de cada time depois de cada rodada; o ranking de todos os grupos recalcula sozinho.</p>
+                <div class="admin-grid" id="adminGrid"></div>
+                <label class="field" style="max-width: 300px;">Trava dos palpites (seu horário local)
+                    <input class="input" id="inLock" type="datetime-local">
+                </label>
+                <div style="margin-top: 14px;">
+                    <button class="btn primary" type="button" id="btnSaveResults">Salvar resultados</button>
+                </div>
+                <div class="msg" id="adminMsg" hidden></div>
+            </section>
+        </div>
+    </main>
+
+    <footer>
+        <p>Pontuação igual à do Pick'em oficial: 3-0 e 0-3 só valem no placar exato; "avança" só vale com 3-1 ou 3-2.</p>
+    </footer>
+
+    <script>
+    (function () {
+        'use strict';
+
+        var CFG = window.BOLAO_CONFIG || {};
+        var $ = function (id) { return document.getElementById(id); };
+        var KINDS = [
+            { key: 'three_zero', short: '3-0', cls: '30', max: 2, label: '3-0' },
+            { key: 'advance', short: 'Avança', cls: 'adv', max: 6, label: 'Avançam' },
+            { key: 'zero_three', short: '0-3', cls: '03', max: 2, label: '0-3' }
+        ];
+
+        var state = {
+            user: null, profile: null, isAdmin: false, stage: null,
+            picks: emptyPicks(), savedJson: null, hasSaved: false,
+            groups: [], groupId: null, board: [], tab: 'picks',
+            authMode: 'signup', recovering: false
+        };
+        var sb = null;
+
+        function emptyPicks() { return { three_zero: [], advance: [], zero_three: [] }; }
+
+        // ---------- utilidades ----------
+        function el(tag, props) {
+            var node = document.createElement(tag);
+            var i, key;
+            if (props) {
+                for (key in props) {
+                    if (key === 'class') node.className = props[key];
+                    else if (key === 'text') node.textContent = props[key];
+                    else if (key.indexOf('on') === 0) node.addEventListener(key.slice(2), props[key]);
+                    else node.setAttribute(key, props[key]);
+                }
+            }
+            for (i = 2; i < arguments.length; i++) {
+                var child = arguments[i];
+                if (child == null) continue;
+                node.appendChild(typeof child === 'string' ? document.createTextNode(child) : child);
+            }
+            return node;
+        }
+
+        function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+
+        function showMsg(id, text, kind) {
+            var node = $(id);
+            if (!text) { node.hidden = true; return; }
+            node.textContent = text;
+            node.className = 'msg ' + (kind || 'error');
+            node.hidden = false;
+        }
+
+        var ERRORS = [
+            [/invalid login credentials/i, 'E-mail ou senha incorretos.'],
+            [/already registered|already been registered/i, 'Este e-mail já tem conta. Use "Já tenho conta".'],
+            [/password should be at least/i, 'A senha precisa ter pelo menos 6 caracteres.'],
+            [/unable to validate email|invalid format|is invalid/i, 'Confira o e-mail digitado.'],
+            [/email not confirmed/i, 'Confirme seu e-mail pelo link que enviamos antes de entrar.'],
+            [/rate limit|too many/i, 'Muitas tentativas. Espere um pouco e tente de novo.'],
+            [/failed to fetch|network/i, 'Sem conexão com o servidor. Tente de novo.'],
+            [/row-level security|permission denied/i, 'Você não tem permissão para fazer isso.'],
+            [/profiles_display_name_check/i, 'O nome precisa ter de 2 a 24 caracteres.']
+        ];
+        function friendly(error) {
+            var text = (error && (error.message || error.error_description)) || String(error || '');
+            for (var i = 0; i < ERRORS.length; i++) {
+                if (ERRORS[i][0].test(text)) return ERRORS[i][1];
+            }
+            return text || 'Algo deu errado. Tente de novo.';
+        }
+
+        function isLocked() {
+            return !!state.stage && Date.now() >= new Date(state.stage.lock_at).getTime();
+        }
+
+        function record(team) {
+            var r = state.stage && state.stage.results && state.stage.results[team];
+            if (!Array.isArray(r)) return [0, 0];
+            return [Number(r[0]) || 0, Number(r[1]) || 0];
+        }
+
+        // 'hit' = ponto garantido, 'miss' = perdido, 'live' = ainda pode acontecer
+        function pickStatus(kind, team) {
+            var r = record(team), w = r[0], l = r[1];
+            if (kind === 'three_zero') {
+                if (w === 3 && l === 0) return 'hit';
+                return l > 0 ? 'miss' : 'live';
+            }
+            if (kind === 'zero_three') {
+                if (l === 3 && w === 0) return 'hit';
+                return w > 0 ? 'miss' : 'live';
+            }
+            if (w === 3 && l > 0) return 'hit';
+            if (l === 3 || (w === 3 && l === 0)) return 'miss';
+            return 'live';
+        }
+
+        function score(picks) {
+            var points = 0, live = 0;
+            KINDS.forEach(function (kind) {
+                (picks[kind.key] || []).forEach(function (team) {
+                    var s = pickStatus(kind.key, team);
+                    if (s === 'hit') points++;
+                    else if (s === 'live') live++;
+                });
+            });
+            return { points: points, live: live };
+        }
+
+        function fmtDate(iso) {
+            return new Date(iso).toLocaleString('pt-BR', {
+                weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+            });
+        }
+
+        function countdown(ms) {
+            var total = Math.max(0, Math.floor(ms / 1000));
+            var d = Math.floor(total / 86400), h = Math.floor((total % 86400) / 3600);
+            var m = Math.floor((total % 3600) / 60), s = total % 60;
+            if (d > 0) return d + 'd ' + h + 'h ' + m + 'min';
+            if (h > 0) return h + 'h ' + m + 'min';
+            return m + 'min ' + s + 's';
+        }
+
+        // ---------- carregamento ----------
+        function show(view) {
+            ['viewSetup', 'viewError', 'viewAuth', 'viewApp'].forEach(function (id) { $(id).hidden = id !== view; });
+        }
+
+        function fail(error) {
+            $('errorText').textContent = friendly(error);
+            show('viewError');
+        }
+
+        async function loadStage() {
+            var res = await sb.from('stages').select('id,name,teams,lock_at,results').eq('id', CFG.stageId).maybeSingle();
+            if (res.error) throw res.error;
+            if (!res.data) throw new Error('O stage "' + CFG.stageId + '" não existe no banco. Rode o arquivo supabase/schema.sql.');
+            state.stage = res.data;
+            $('stageName').textContent = res.data.name;
+            renderLock();
+        }
+
+        async function loadAccount() {
+            var uid = state.user.id;
+            var results = await Promise.all([
+                sb.from('profiles').select('display_name').eq('id', uid).maybeSingle(),
+                sb.from('admins').select('user_id').eq('user_id', uid).maybeSingle(),
+                sb.from('picks').select('three_zero,zero_three,advance,updated_at').eq('user_id', uid).eq('stage_id', CFG.stageId).maybeSingle()
+            ]);
+            if (results[0].error) throw results[0].error;
+            state.profile = results[0].data || { display_name: 'Jogador' };
+            state.isAdmin = !!(results[1].data);
+            var mine = results[2].data;
+            state.hasSaved = !!mine;
+            state.picks = mine
+                ? { three_zero: mine.three_zero.slice(), advance: mine.advance.slice(), zero_three: mine.zero_three.slice() }
+                : emptyPicks();
+            state.savedJson = mine ? picksJson(state.picks) : null;
+        }
+
+        function picksJson(picks) {
+            return JSON.stringify(KINDS.map(function (k) { return picks[k.key].slice().sort(); }));
+        }
+
+        async function loadGroups() {
+            var res = await sb.from('groups').select('id,name,invite_code,owner_id,created_at').order('created_at');
+            if (res.error) throw res.error;
+            state.groups = res.data || [];
+            var remembered = null;
+            try { remembered = localStorage.getItem('bolao_group'); } catch (e) { /* sem storage */ }
+            var ids = state.groups.map(function (g) { return g.id; });
+            if (ids.indexOf(state.groupId) < 0) {
+                state.groupId = ids.indexOf(remembered) >= 0 ? remembered : (ids[0] || null);
+            }
+        }
+
+        async function loadBoard() {
+            if (!state.groupId) { state.board = []; return; }
+            var res = await sb.rpc('group_board', { p_group: state.groupId, p_stage: CFG.stageId });
+            if (res.error) throw res.error;
+            state.board = res.data || [];
+        }
+
+        function pendingInvite() {
+            try { return sessionStorage.getItem('bolao_invite'); } catch (e) { return null; }
+        }
+
+        async function consumeInvite() {
+            var code = pendingInvite();
+            if (!code) return;
+            try { sessionStorage.removeItem('bolao_invite'); } catch (e) { /* sem storage */ }
+            var res = await sb.rpc('join_group', { p_code: code });
+            if (res.error) {
+                state.tab = 'groups';
+                state.inviteError = friendly(res.error);
+                return;
+            }
+            state.groupId = res.data.id;
+            state.tab = 'groups';
+        }
+
+        async function enterApp() {
+            try {
+                await loadAccount();
+                await consumeInvite();
+                await loadGroups();
+                await loadBoard();
+            } catch (error) {
+                return fail(error);
+            }
+            $('account').hidden = false;
+            $('accountName').textContent = state.profile.display_name;
+            $('tabAdmin').hidden = !state.isAdmin;
+            show('viewApp');
+            renderAll();
+            if (state.inviteError) { showMsg('groupsMsg', state.inviteError); state.inviteError = null; }
+        }
+
+        // ---------- topo ----------
+        function renderLock() {
+            if (!state.stage) return;
+            var locked = isLocked();
+            $('lockbar').hidden = false;
+            var pill = $('lockPill');
+            pill.textContent = locked ? 'Palpites encerrados' : 'Palpites abertos';
+            pill.className = 'lock-pill ' + (locked ? 'closed' : 'open');
+            var text = $('lockText');
+            clear(text);
+            if (locked) {
+                text.appendChild(document.createTextNode('O stage começou em ' + fmtDate(state.stage.lock_at) + '.'));
+            } else {
+                text.appendChild(document.createTextNode('Fecham em '));
+                text.appendChild(el('strong', { text: countdown(new Date(state.stage.lock_at) - Date.now()) }));
+                text.appendChild(document.createTextNode(' (' + fmtDate(state.stage.lock_at) + ', no seu horário).'));
+            }
+            var link = $('predLink');
+            if (CFG.predictionsPage) link.href = CFG.predictionsPage; else link.hidden = true;
+        }
+
+        // ---------- palpites ----------
+        function kindOf(team) {
+            for (var i = 0; i < KINDS.length; i++) {
+                if (state.picks[KINDS[i].key].indexOf(team) >= 0) return KINDS[i];
+            }
+            return null;
+        }
+
+        function toggle(team, kind) {
+            if (isLocked()) return;
+            var current = kindOf(team);
+            if (current) state.picks[current.key] = state.picks[current.key].filter(function (t) { return t !== team; });
+            if (!current || current.key !== kind.key) {
+                if (state.picks[kind.key].length >= kind.max) {
+                    if (current) state.picks[current.key].push(team);
+                    showMsg('picksMsg', 'Você já escolheu ' + kind.max + ' times para "' + kind.label + '". Tire um antes de trocar.');
+                    return;
+                }
+                state.picks[kind.key].push(team);
+            }
+            showMsg('picksMsg', '');
+            renderPicks();
+        }
+
+        function complete() {
+            return KINDS.every(function (k) { return state.picks[k.key].length === k.max; });
+        }
+
+        function renderPicks() {
+            var locked = isLocked();
+            var hint = $('picksHint');
+            if (locked) {
+                hint.textContent = state.hasSaved
+                    ? 'O stage já começou e seu palpite está travado. Os resultados aparecem ao lado de cada time.'
+                    : 'O stage já começou e você não enviou palpite a tempo. Fica para o próximo stage!';
+            } else {
+                hint.textContent = 'Marque 2 times que terminam 3-0, 6 que avançam com 3-1 ou 3-2 e 2 que terminam 0-3. Dá para mudar quantas vezes quiser até a trava.';
+            }
+
+            KINDS.forEach(function (k) {
+                var node = $('count' + (k.cls === 'adv' ? 'Adv' : k.cls));
+                var n = state.picks[k.key].length;
+                node.textContent = k.label + ' ' + n + '/' + k.max;
+                node.classList.toggle('full', n === k.max);
+            });
+
+            var changed = picksJson(state.picks) !== state.savedJson;
+            var save = $('btnSave');
+            save.hidden = locked;
+            save.disabled = !complete() || !changed;
+            save.textContent = state.hasSaved ? (changed ? 'Salvar alterações' : 'Palpite salvo') : 'Salvar palpite';
+
+            var list = $('teams');
+            clear(list);
+            state.stage.teams.forEach(function (team, index) {
+                var selected = kindOf(team);
+                var rec = record(team);
+                var name = el('span', { class: 'team-name', text: team });
+                if (rec[0] + rec[1] > 0) name.appendChild(el('span', { class: 'team-rec', text: rec[0] + '-' + rec[1] }));
+                var seg = el('div', { class: 'seg', role: 'group', 'aria-label': 'Palpite para ' + team });
+                KINDS.forEach(function (kind) {
+                    var pressed = !!selected && selected.key === kind.key;
+                    var button = el('button', {
+                        type: 'button', class: 'b' + kind.cls, text: kind.short,
+                        'aria-pressed': pressed ? 'true' : 'false',
+                        onclick: function () { toggle(team, kind); }
+                    });
+                    if (locked) button.disabled = true;
+                    seg.appendChild(button);
+                });
+                list.appendChild(el('div', { class: 'team' + (selected ? ' sel-' + selected.cls : '') },
+                    el('span', { class: 'seed', text: String(index + 1) }), name, seg));
+            });
+        }
+
+        async function savePicks() {
+            if (!complete()) return;
+            var save = $('btnSave');
+            save.disabled = true;
+            var row = {
+                user_id: state.user.id, stage_id: CFG.stageId,
+                three_zero: state.picks.three_zero, zero_three: state.picks.zero_three, advance: state.picks.advance
+            };
+            var res = state.hasSaved
+                ? await sb.from('picks').update({ three_zero: row.three_zero, zero_three: row.zero_three, advance: row.advance })
+                    .eq('user_id', row.user_id).eq('stage_id', row.stage_id).select('updated_at')
+                : await sb.from('picks').insert(row).select('updated_at');
+            if (res.error) {
+                showMsg('picksMsg', friendly(res.error));
+                renderPicks();
+                return;
+            }
+            state.hasSaved = true;
+            state.savedJson = picksJson(state.picks);
+            showMsg('picksMsg', 'Palpite salvo! Você pode alterar até a trava.', 'ok');
+            renderPicks();
+            loadBoard().then(renderBoard).catch(function () { /* o ranking atualiza na próxima leitura */ });
+        }
+
+        // ---------- grupos e ranking ----------
+        function currentGroup() {
+            for (var i = 0; i < state.groups.length; i++) {
+                if (state.groups[i].id === state.groupId) return state.groups[i];
+            }
+            return null;
+        }
+
+        function inviteLink(code) {
+            return location.origin + location.pathname + '?grupo=' + encodeURIComponent(code);
+        }
+
+        function chipList(picks) {
+            var box = el('div', { class: 'chips' });
+            KINDS.forEach(function (kind) {
+                (picks[kind.key] || []).forEach(function (team) {
+                    var status = pickStatus(kind.key, team);
+                    box.appendChild(el('span', { class: 'chip' + (status === 'live' ? '' : ' ' + status) },
+                        el('span', { class: 'k', text: kind.short === 'Avança' ? 'AV' : kind.short }), team));
+                });
+            });
+            return box;
+        }
+
+        function renderBoard() {
+            var group = currentGroup();
+            $('boardPanel').hidden = !group;
+            if (!group) return;
+
+            var chips = $('groupChips');
+            clear(chips);
+            state.groups.forEach(function (g) {
+                chips.appendChild(el('button', {
+                    type: 'button', class: 'tab', text: g.name,
+                    'aria-selected': g.id === state.groupId ? 'true' : 'false',
+                    onclick: function () { selectGroup(g.id); }
+                }));
+            });
+
+            $('inviteCode').textContent = group.invite_code;
+            var owner = group.owner_id === state.user.id;
+            var leave = $('btnLeave');
+            leave.textContent = owner ? 'Excluir grupo' : 'Sair do grupo';
+            leave.dataset.armed = '';
+
+            var locked = isLocked();
+            var head = $('boardHead'), body = $('boardBody');
+            clear(head); clear(body);
+            $('boardLegend').hidden = !locked;
+
+            if (!locked) {
+                $('boardHint').textContent = 'Os palpites de cada um ficam escondidos até o stage começar. Por enquanto dá para ver quem já enviou.';
+                head.appendChild(el('tr', null, el('th', { text: 'Participante' }), el('th', { text: 'Palpite' })));
+                state.board.forEach(function (row) {
+                    var who = el('td', { class: 'who', text: row.display_name });
+                    if (row.user_id === state.user.id) who.appendChild(el('span', { class: 'tag', text: 'você' }));
+                    body.appendChild(el('tr', { class: row.user_id === state.user.id ? 'me' : '' }, who,
+                        el('td', null, row.submitted
+                            ? el('span', { class: 'chip hit', text: 'Enviado' })
+                            : el('span', { class: 'chip', text: 'Ainda não enviou' }))));
+                });
+                return;
+            }
+
+            $('boardHint').textContent = 'Pontos = picks já confirmados. "Vivos" são os que ainda podem pontuar.';
+            head.appendChild(el('tr', null,
+                el('th', { class: 'num', text: '#' }), el('th', { text: 'Participante' }),
+                el('th', { class: 'num', text: 'Pontos' }), el('th', { class: 'num', text: 'Vivos' }),
+                el('th', { text: 'Palpite' })));
+
+            var rows = state.board.map(function (row) {
+                var picks = row.submitted
+                    ? { three_zero: row.three_zero || [], advance: row.advance || [], zero_three: row.zero_three || [] }
+                    : null;
+                var s = picks ? score(picks) : { points: 0, live: 0 };
+                return { row: row, picks: picks, points: s.points, live: s.live };
+            });
+            rows.sort(function (a, b) {
+                if (!!b.picks !== !!a.picks) return a.picks ? -1 : 1;
+                return (b.points - a.points) || (b.live - a.live)
+                    || (new Date(a.row.updated_at || 0) - new Date(b.row.updated_at || 0));
+            });
+
+            rows.forEach(function (item, index) {
+                var mine = item.row.user_id === state.user.id;
+                var who = el('td', { class: 'who', text: item.row.display_name });
+                if (mine) who.appendChild(el('span', { class: 'tag', text: 'você' }));
+                body.appendChild(el('tr', { class: mine ? 'me' : '' },
+                    el('td', { class: 'num', text: item.picks ? String(index + 1) : '-' }), who,
+                    el('td', { class: 'num pts', text: String(item.points) }),
+                    el('td', { class: 'num', text: item.picks ? String(item.live) : '-' }),
+                    el('td', null, item.picks ? chipList(item.picks) : el('span', { class: 'hint', text: 'Não enviou palpite' }))));
+            });
+
+            var model = CFG.modelPicks;
+            if (model && model.three_zero && model.advance && model.zero_three) {
+                var ms = score(model);
+                var who = el('td', { class: 'who', text: 'Modelo' });
+                who.appendChild(el('span', { class: 'tag', text: 'referência' }));
+                body.appendChild(el('tr', { class: 'model' },
+                    el('td', { class: 'num', text: '-' }), who,
+                    el('td', { class: 'num pts', text: String(ms.points) }),
+                    el('td', { class: 'num', text: String(ms.live) }),
+                    el('td', null, chipList(model))));
+            }
+        }
+
+        async function selectGroup(id) {
+            state.groupId = id;
+            try { localStorage.setItem('bolao_group', id); } catch (e) { /* sem storage */ }
+            try { await loadBoard(); } catch (error) { showMsg('groupsMsg', friendly(error)); }
+            renderBoard();
+        }
+
+        async function createGroup(event) {
+            event.preventDefault();
+            var name = $('inGroupName').value.trim();
+            if (name.length < 2) return showMsg('groupsMsg', 'Dê um nome ao grupo (pelo menos 2 letras).');
+            var res = await sb.rpc('create_group', { p_name: name });
+            if (res.error) return showMsg('groupsMsg', friendly(res.error));
+            $('inGroupName').value = '';
+            showMsg('groupsMsg', 'Grupo "' + res.data.name + '" criado. Copie o link de convite e mande para a galera.', 'ok');
+            await afterGroupChange(res.data.id);
+        }
+
+        async function joinGroup(event) {
+            event.preventDefault();
+            var code = $('inCode').value.trim();
+            if (!code) return showMsg('groupsMsg', 'Digite o código de convite.');
+            var res = await sb.rpc('join_group', { p_code: code });
+            if (res.error) return showMsg('groupsMsg', friendly(res.error));
+            $('inCode').value = '';
+            showMsg('groupsMsg', 'Você entrou em "' + res.data.name + '".', 'ok');
+            await afterGroupChange(res.data.id);
+        }
+
+        async function afterGroupChange(id) {
+            try {
+                await loadGroups();
+                if (id) state.groupId = id;
+                await loadBoard();
+            } catch (error) { showMsg('groupsMsg', friendly(error)); }
+            renderBoard();
+        }
+
+        async function leaveGroup() {
+            var group = currentGroup();
+            if (!group) return;
+            var button = $('btnLeave');
+            var owner = group.owner_id === state.user.id;
+            if (!button.dataset.armed) {
+                button.dataset.armed = '1';
+                button.textContent = owner ? 'Confirmar: excluir para todos' : 'Confirmar saída';
+                return;
+            }
+            var res = owner
+                ? await sb.from('groups').delete().eq('id', group.id)
+                : await sb.from('group_members').delete().eq('group_id', group.id).eq('user_id', state.user.id);
+            if (res.error) return showMsg('groupsMsg', friendly(res.error));
+            state.groupId = null;
+            showMsg('groupsMsg', owner ? 'Grupo excluído.' : 'Você saiu do grupo.', 'ok');
+            await afterGroupChange(null);
+        }
+
+        async function copyInvite() {
+            var group = currentGroup();
+            if (!group) return;
+            var link = inviteLink(group.invite_code);
+            var button = $('btnCopy');
+            try {
+                await navigator.clipboard.writeText(link);
+                button.textContent = 'Link copiado!';
+            } catch (e) {
+                showMsg('groupsMsg', 'Copie o link: ' + link, 'ok');
+            }
+            setTimeout(function () { button.textContent = 'Copiar link de convite'; }, 2000);
+        }
+
+        // ---------- admin ----------
+        function localInputValue(iso) {
+            var d = new Date(iso);
+            var pad = function (n) { return String(n).padStart(2, '0'); };
+            return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+        }
+
+        function renderAdmin() {
+            if (!state.isAdmin) return;
+            var grid = $('adminGrid');
+            clear(grid);
+            state.stage.teams.forEach(function (team, index) {
+                var rec = record(team);
+                var makeSelect = function (value, label) {
+                    var select = el('select', { 'aria-label': label + ' de ' + team, 'data-team': team, 'data-kind': label });
+                    for (var n = 0; n <= 3; n++) {
+                        var option = el('option', { value: String(n), text: String(n) + (label === 'Vitórias' ? 'V' : 'D') });
+                        if (n === value) option.selected = true;
+                        select.appendChild(option);
+                    }
+                    return select;
+                };
+                grid.appendChild(el('div', { class: 'admin-row' },
+                    el('span', { text: (index + 1) + '. ' + team }),
+                    makeSelect(rec[0], 'Vitórias'), makeSelect(rec[1], 'Derrotas')));
+            });
+            $('inLock').value = localInputValue(state.stage.lock_at);
+        }
+
+        async function saveResults() {
+            var results = {}, wins = 0, losses = 0, problem = null;
+            state.stage.teams.forEach(function (team) {
+                var selects = $('adminGrid').querySelectorAll('select[data-team="' + CSS.escape(team) + '"]');
+                var w = Number(selects[0].value), l = Number(selects[1].value);
+                if (w === 3 && l === 3) problem = team + ' não pode ter 3 vitórias e 3 derrotas.';
+                wins += w; losses += l;
+                if (w + l > 0) results[team] = [w, l];
+            });
+            if (!problem && wins !== losses) problem = 'O total de vitórias (' + wins + ') precisa ser igual ao de derrotas (' + losses + ').';
+            var lock = new Date($('inLock').value);
+            if (!problem && isNaN(lock.getTime())) problem = 'Informe a data e a hora da trava.';
+            if (problem) return showMsg('adminMsg', problem);
+
+            var res = await sb.from('stages').update({ results: results, lock_at: lock.toISOString() })
+                .eq('id', CFG.stageId).select('id,name,teams,lock_at,results');
+            if (res.error) return showMsg('adminMsg', friendly(res.error));
+            if (!res.data || !res.data.length) return showMsg('adminMsg', 'Você não tem permissão para gravar resultados.');
+            state.stage = res.data[0];
+            showMsg('adminMsg', 'Resultados salvos. O ranking já está atualizado.', 'ok');
+            renderAll();
+        }
+
+        // ---------- abas ----------
+        function setTab(tab) {
+            state.tab = tab;
+            renderAll();
+        }
+
+        function renderAll() {
+            if (!state.stage || !state.user) return;
+            if (state.tab === 'admin' && !state.isAdmin) state.tab = 'picks';
+            document.querySelectorAll('.tabs [data-tab]').forEach(function (button) {
+                button.setAttribute('aria-selected', button.dataset.tab === state.tab ? 'true' : 'false');
+            });
+            $('panelPicks').hidden = state.tab !== 'picks';
+            $('panelGroups').hidden = state.tab !== 'groups';
+            $('panelAdmin').hidden = state.tab !== 'admin';
+            renderLock();
+            renderPicks();
+            renderBoard();
+            if (state.tab === 'admin') renderAdmin();
+        }
+
+        // ---------- conta ----------
+        function setAuthMode(mode) {
+            state.authMode = mode;
+            var signup = mode === 'signup', recover = mode === 'recover';
+            $('authTabs').hidden = recover;
+            $('tabSignup').setAttribute('aria-selected', signup ? 'true' : 'false');
+            $('tabLogin').setAttribute('aria-selected', mode === 'login' ? 'true' : 'false');
+            $('fieldName').hidden = !signup;
+            $('fieldEmail').hidden = recover;
+            $('btnForgot').hidden = mode !== 'login' || !CFG.passwordReset;
+            $('inPass').autocomplete = mode === 'login' ? 'current-password' : 'new-password';
+            $('authSubmit').textContent = signup ? 'Criar conta' : (recover ? 'Salvar nova senha' : 'Entrar');
+            $('authTitle').textContent = recover ? 'Crie uma nova senha' : 'Entre para palpitar';
+            if (pendingInvite() && !recover) {
+                $('authHint').textContent = 'Você foi convidado para um grupo do bolão. Crie sua conta (ou entre) e você já cai dentro dele.';
+            }
+            showMsg('authMsg', '');
+        }
+
+        async function submitAuth(event) {
+            event.preventDefault();
+            var email = $('inEmail').value.trim(), pass = $('inPass').value, name = $('inName').value.trim();
+            var button = $('authSubmit');
+            if (state.authMode !== 'recover' && !email) return showMsg('authMsg', 'Digite seu e-mail.');
+            if (pass.length < 6) return showMsg('authMsg', 'A senha precisa ter pelo menos 6 caracteres.');
+            if (state.authMode === 'signup' && name.length < 2) return showMsg('authMsg', 'Digite seu nome (pelo menos 2 letras).');
+            button.disabled = true;
+            try {
+                var res;
+                if (state.authMode === 'signup') {
+                    res = await sb.auth.signUp({ email: email, password: pass, options: { data: { display_name: name } } });
+                    if (!res.error && !res.data.session) {
+                        showMsg('authMsg', 'Conta criada! Abra o link de confirmação que enviamos para o seu e-mail e depois entre.', 'ok');
+                    }
+                } else if (state.authMode === 'recover') {
+                    res = await sb.auth.updateUser({ password: pass });
+                    if (!res.error) {
+                        state.recovering = false;
+                        $('inPass').value = '';
+                        await enterApp();
+                    }
+                } else {
+                    res = await sb.auth.signInWithPassword({ email: email, password: pass });
+                }
+                if (res.error) showMsg('authMsg', friendly(res.error));
+            } catch (error) {
+                showMsg('authMsg', friendly(error));
+            }
+            button.disabled = false;
+        }
+
+        async function forgotPassword() {
+            var email = $('inEmail').value.trim();
+            if (!email) return showMsg('authMsg', 'Digite seu e-mail acima e clique de novo em "Esqueci a senha".');
+            var res = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+            if (res.error) return showMsg('authMsg', friendly(res.error));
+            showMsg('authMsg', 'Se esse e-mail tiver conta, enviamos um link para criar uma nova senha.', 'ok');
+        }
+
+        async function rename() {
+            var current = state.profile.display_name;
+            var name = window.prompt('Seu nome no ranking (2 a 24 caracteres):', current);
+            if (name == null) return;
+            name = name.trim();
+            if (name === current) return;
+            if (name.length < 2 || name.length > 24) return window.alert('O nome precisa ter de 2 a 24 caracteres.');
+            var res = await sb.from('profiles').update({ display_name: name }).eq('id', state.user.id);
+            if (res.error) return window.alert(friendly(res.error));
+            state.profile.display_name = name;
+            $('accountName').textContent = name;
+            loadBoard().then(renderBoard).catch(function () { /* atualiza depois */ });
+        }
+
+        // ---------- início ----------
+        async function refresh() {
+            if (document.hidden || !state.stage) return;
+            try {
+                var wasLocked = isLocked();
+                await loadStage();
+                if (state.user && !state.recovering) {
+                    await loadBoard();
+                    if (state.tab !== 'admin') renderAll();
+                    else if (wasLocked !== isLocked()) renderAll();
+                }
+            } catch (e) { /* tenta de novo no próximo ciclo */ }
+        }
+
+        async function start() {
+            var configured = CFG.supabaseUrl && CFG.supabaseAnonKey
+                && CFG.supabaseUrl.indexOf('SEU-PROJETO') < 0 && CFG.supabaseAnonKey.indexOf('SUA-CHAVE') < 0;
+            if (!configured || !window.supabase) return show('viewSetup');
+
+            var invite = new URLSearchParams(location.search).get('grupo');
+            if (invite) {
+                try { sessionStorage.setItem('bolao_invite', invite); } catch (e) { /* sem storage */ }
+                history.replaceState(null, '', location.pathname);
+            }
+
+            sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey);
+
+            $('tabSignup').addEventListener('click', function () { setAuthMode('signup'); });
+            $('tabLogin').addEventListener('click', function () { setAuthMode('login'); });
+            $('authForm').addEventListener('submit', submitAuth);
+            $('btnForgot').addEventListener('click', forgotPassword);
+            $('btnLogout').addEventListener('click', function () { sb.auth.signOut(); });
+            $('btnRename').addEventListener('click', rename);
+            $('btnSave').addEventListener('click', savePicks);
+            $('formCreate').addEventListener('submit', createGroup);
+            $('formJoin').addEventListener('submit', joinGroup);
+            $('btnCopy').addEventListener('click', copyInvite);
+            $('btnLeave').addEventListener('click', leaveGroup);
+            $('btnSaveResults').addEventListener('click', saveResults);
+            document.querySelectorAll('.tabs [data-tab]').forEach(function (button) {
+                button.addEventListener('click', function () { setTab(button.dataset.tab); });
+            });
+
+            // O listener é registrado antes de qualquer espera para não perder o
+            // evento inicial; o tratamento aguarda o stage carregar.
+            var stageReady = loadStage();
+            stageReady.catch(fail);
+
+            sb.auth.onAuthStateChange(function (event, session) {
+                // Fora do callback para não travar o cliente de autenticação.
+                stageReady.then(function () {
+                    if (event === 'PASSWORD_RECOVERY') {
+                        state.recovering = true;
+                        state.user = session ? session.user : null;
+                        setAuthMode('recover');
+                        return show('viewAuth');
+                    }
+                    var user = session ? session.user : null;
+                    if (!user) {
+                        state.user = null;
+                        $('account').hidden = true;
+                        setAuthMode(state.authMode === 'recover' ? 'login' : state.authMode);
+                        return show('viewAuth');
+                    }
+                    if (state.recovering) return;
+                    if (state.user && state.user.id === user.id) return;
+                    state.user = user;
+                    enterApp();
+                }, function () { /* erro já mostrado por fail() */ });
+            });
+
+            var lastLocked = isLocked();
+            setInterval(function () {
+                if (!state.stage) return;
+                renderLock();
+                if (isLocked() !== lastLocked) { lastLocked = isLocked(); refresh(); if (state.user) renderAll(); }
+            }, 1000);
+            setInterval(refresh, 60000);
+            document.addEventListener('visibilitychange', refresh);
+        }
+
+        start();
+    })();
+    </script>
+</body>
+</html>

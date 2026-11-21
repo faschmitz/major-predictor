@@ -965,6 +965,13 @@ def generate_html():
             font-weight: 600;
         }}
 
+        .hero-cta {{
+            display: inline-block; margin-top: 26px; padding: 12px 26px; border-radius: 999px;
+            background: var(--primary); color: #fff; font-weight: 700; text-decoration: none;
+            box-shadow: 0 8px 24px rgba(239, 51, 64, 0.35); transition: transform 0.15s;
+        }}
+        .hero-cta:hover {{ transform: translateY(-2px); }}
+
         .hero-picks-title {{
             font-family: 'Rajdhani', sans-serif;
             font-weight: 700;
@@ -1115,6 +1122,7 @@ def generate_html():
 
             <div class="hero-picks-title">Seu Pick'em em um olhar</div>
             {hero_picks_html}
+            <a class="hero-cta" href="bolao.html">🏆 Entrar no bolão com os amigos</a>
         </div>
         {SKYLINE_SVG}
     </section>
