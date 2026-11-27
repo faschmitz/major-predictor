@@ -81,9 +81,11 @@
         }
         .lock-pill.open { color: var(--success); border-color: rgba(61, 220, 151, 0.5); background: rgba(61, 220, 151, 0.1); }
         .lock-pill.closed { color: var(--secondary); border-color: rgba(255, 184, 77, 0.5); background: rgba(255, 184, 77, 0.1); }
+        .stage-switch { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 16px; }
+        .sort-toggle { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; font-size: 0.85rem; color: var(--muted); }
 
         /* ---------- elementos comuns ---------- */
-        main { padding: 24px 0 60px; }
+        main { padding: 24px 0 28px; }
         .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px; }
         .panel + .panel { margin-top: 18px; }
         .panel h2 { font-size: 1.45rem; margin-bottom: 4px; }
@@ -211,7 +213,7 @@
         }
         .admin-row select { background: var(--dark); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
 
-        footer { text-align: center; color: var(--muted); font-size: 0.85rem; padding: 0 16px 40px; margin-top: -30px; }
+        footer { text-align: center; color: var(--muted); font-size: 0.85rem; padding: 0 16px 40px; }
 
         @media (max-width: 520px) {
             .panel { padding: 16px; }
@@ -250,6 +252,7 @@
                     <button class="btn small ghost" id="btnLogout" type="button">Sair</button>
                 </div>
             </div>
+            <div class="stage-switch" id="stageSwitch" role="tablist" aria-label="Stage" hidden></div>
             <div class="lockbar" id="lockbar" hidden>
                 <span class="lock-pill" id="lockPill"></span>
                 <span id="lockText"></span>
@@ -348,6 +351,11 @@
                         <span class="spacer"></span>
                         <button class="btn small ghost danger" type="button" id="btnLeave">Sair do grupo</button>
                     </div>
+                    <div class="sort-toggle" id="sortToggle" hidden>
+                        <span>Ordenar por:</span>
+                        <button class="tab" type="button" data-sort="stage" aria-selected="true">Este stage</button>
+                        <button class="tab" type="button" data-sort="total" aria-selected="false">Geral</button>
+                    </div>
                     <p class="hint" id="boardHint"></p>
                     <div class="board-wrap">
                         <table class="board">
@@ -366,7 +374,7 @@
 
             <!-- Admin -->
             <section class="panel" id="panelAdmin" hidden>
-                <h2>Resultados do stage</h2>
+                <h2 id="adminTitle">Resultados do stage</h2>
                 <p class="hint">Só você vê esta aba. Atualize vitórias e derrotas de cada time depois de cada rodada; o ranking de todos os grupos recalcula sozinho.</p>
                 <div class="admin-grid" id="adminGrid"></div>
                 <label class="field" style="max-width: 300px;">Trava dos palpites (seu horário local)
@@ -396,10 +404,16 @@
             { key: 'zero_three', short: '0-3', cls: '03', max: 2, label: '0-3' }
         ];
 
+        // Stages do bolão, em ordem (o último é o atual). Aceita a config antiga.
+        var STAGE_CFG = (Array.isArray(CFG.stages) && CFG.stages.length)
+            ? CFG.stages
+            : [{ id: CFG.stageId, label: '', predictionsPage: CFG.predictionsPage, modelPicks: CFG.modelPicks }];
+
         var state = {
-            user: null, profile: null, isAdmin: false, stage: null,
-            picks: emptyPicks(), savedJson: null, hasSaved: false,
-            groups: [], groupId: null, board: [], tab: 'picks',
+            user: null, profile: null, isAdmin: false,
+            stages: {}, stageOrder: [], stageId: null, stage: null,
+            picks: emptyPicks(), savedJson: null, hasSaved: false, drafts: {},
+            groups: [], groupId: null, boards: {}, board: [], sortBy: 'stage', tab: 'picks',
             authMode: 'signup', recovering: false
         };
         var sb = null;
@@ -455,19 +469,35 @@
             return text || 'Algo deu errado. Tente de novo.';
         }
 
-        function isLocked() {
-            return !!state.stage && Date.now() >= new Date(state.stage.lock_at).getTime();
+        function stageCfg(id) {
+            for (var i = 0; i < STAGE_CFG.length; i++) {
+                if (STAGE_CFG[i].id === id) return STAGE_CFG[i];
+            }
+            return {};
         }
 
-        function record(team) {
-            var r = state.stage && state.stage.results && state.stage.results[team];
+        function stageLabel(id) {
+            return stageCfg(id).label || (state.stages[id] && state.stages[id].name) || id;
+        }
+
+        function multiStage() { return state.stageOrder.length > 1; }
+
+        function lockedStage(stage) {
+            return !!stage && Date.now() >= new Date(stage.lock_at).getTime();
+        }
+
+        function isLocked() { return lockedStage(state.stage); }
+
+        function record(team, stage) {
+            stage = stage || state.stage;
+            var r = stage && stage.results && stage.results[team];
             if (!Array.isArray(r)) return [0, 0];
             return [Number(r[0]) || 0, Number(r[1]) || 0];
         }
 
         // 'hit' = ponto garantido, 'miss' = perdido, 'live' = ainda pode acontecer
-        function pickStatus(kind, team) {
-            var r = record(team), w = r[0], l = r[1];
+        function pickStatus(kind, team, stage) {
+            var r = record(team, stage), w = r[0], l = r[1];
             if (kind === 'three_zero') {
                 if (w === 3 && l === 0) return 'hit';
                 return l > 0 ? 'miss' : 'live';
@@ -481,11 +511,11 @@
             return 'live';
         }
 
-        function score(picks) {
+        function score(picks, stage) {
             var points = 0, live = 0;
             KINDS.forEach(function (kind) {
                 (picks[kind.key] || []).forEach(function (team) {
-                    var s = pickStatus(kind.key, team);
+                    var s = pickStatus(kind.key, team, stage);
                     if (s === 'hit') points++;
                     else if (s === 'live') live++;
                 });
@@ -518,13 +548,63 @@
             show('viewError');
         }
 
-        async function loadStage() {
-            var res = await sb.from('stages').select('id,name,teams,lock_at,results').eq('id', CFG.stageId).maybeSingle();
+        // Carrega todos os stages configurados que já existem no banco. Um stage
+        // que ainda não foi criado é ignorado, para a página não quebrar.
+        async function loadStages() {
+            var ids = STAGE_CFG.map(function (c) { return c.id; }).filter(Boolean);
+            var res = await sb.from('stages').select('id,name,teams,lock_at,results').in('id', ids);
             if (res.error) throw res.error;
-            if (!res.data) throw new Error('O stage "' + CFG.stageId + '" não existe no banco. Rode o arquivo supabase/schema.sql.');
-            state.stage = res.data;
-            $('stageName').textContent = res.data.name;
+            var byId = {};
+            (res.data || []).forEach(function (row) { byId[row.id] = row; });
+            var order = ids.filter(function (id) { return !!byId[id]; });
+            if (!order.length) throw new Error('Nenhum stage do bolão existe no banco. Rode o arquivo supabase/schema.sql.');
+            state.stages = byId;
+            state.stageOrder = order;
+            if (order.indexOf(state.stageId) < 0) state.stageId = order[order.length - 1];
+            state.stage = byId[state.stageId];
+            state.board = state.boards[state.stageId] || [];
+            renderStageSwitch();
             renderLock();
+        }
+
+        function renderStageSwitch() {
+            var box = $('stageSwitch');
+            clear(box);
+            box.hidden = !multiStage();
+            state.stageOrder.forEach(function (id) {
+                box.appendChild(el('button', {
+                    type: 'button', class: 'tab', role: 'tab', text: stageLabel(id),
+                    'aria-selected': id === state.stageId ? 'true' : 'false',
+                    onclick: function () { selectStage(id); }
+                }));
+            });
+            $('stageName').textContent = state.stage ? state.stage.name : '';
+        }
+
+        function stashDraft() {
+            if (state.stageId) {
+                state.drafts[state.stageId] = { picks: state.picks, savedJson: state.savedJson, hasSaved: state.hasSaved };
+            }
+        }
+
+        function restoreDraft() {
+            var d = state.drafts[state.stageId];
+            state.picks = d ? d.picks : emptyPicks();
+            state.savedJson = d ? d.savedJson : null;
+            state.hasSaved = d ? d.hasSaved : false;
+        }
+
+        function selectStage(id) {
+            if (id === state.stageId || !state.stages[id]) return;
+            stashDraft();
+            state.stageId = id;
+            state.stage = state.stages[id];
+            state.board = state.boards[id] || [];
+            restoreDraft();
+            showMsg('picksMsg', '');
+            showMsg('adminMsg', '');
+            renderStageSwitch();
+            if (state.user) renderAll(); else renderLock();
         }
 
         async function loadAccount() {
@@ -532,17 +612,18 @@
             var results = await Promise.all([
                 sb.from('profiles').select('display_name').eq('id', uid).maybeSingle(),
                 sb.from('admins').select('user_id').eq('user_id', uid).maybeSingle(),
-                sb.from('picks').select('three_zero,zero_three,advance,updated_at').eq('user_id', uid).eq('stage_id', CFG.stageId).maybeSingle()
+                sb.from('picks').select('stage_id,three_zero,zero_three,advance,updated_at').eq('user_id', uid)
             ]);
             if (results[0].error) throw results[0].error;
+            if (results[2].error) throw results[2].error;
             state.profile = results[0].data || { display_name: 'Jogador' };
             state.isAdmin = !!(results[1].data);
-            var mine = results[2].data;
-            state.hasSaved = !!mine;
-            state.picks = mine
-                ? { three_zero: mine.three_zero.slice(), advance: mine.advance.slice(), zero_three: mine.zero_three.slice() }
-                : emptyPicks();
-            state.savedJson = mine ? picksJson(state.picks) : null;
+            state.drafts = {};
+            (results[2].data || []).forEach(function (row) {
+                var picks = { three_zero: row.three_zero.slice(), advance: row.advance.slice(), zero_three: row.zero_three.slice() };
+                state.drafts[row.stage_id] = { picks: picks, savedJson: picksJson(picks), hasSaved: true };
+            });
+            restoreDraft();
         }
 
         function picksJson(picks) {
@@ -561,11 +642,53 @@
             }
         }
 
+        // Placar do grupo em todos os stages (para a coluna "Geral").
         async function loadBoard() {
-            if (!state.groupId) { state.board = []; return; }
-            var res = await sb.rpc('group_board', { p_group: state.groupId, p_stage: CFG.stageId });
-            if (res.error) throw res.error;
-            state.board = res.data || [];
+            var boards = {};
+            if (state.groupId) {
+                var gid = state.groupId, ids = state.stageOrder.slice();
+                var all = await Promise.all(ids.map(function (id) {
+                    return sb.rpc('group_board', { p_group: gid, p_stage: id });
+                }));
+                for (var i = 0; i < all.length; i++) {
+                    if (all[i].error) throw all[i].error;
+                    boards[ids[i]] = all[i].data || [];
+                }
+            }
+            state.boards = boards;
+            state.board = boards[state.stageId] || [];
+        }
+
+        function rowPicks(row) {
+            if (!row.submitted || !row.advance) return null;
+            return { three_zero: row.three_zero || [], advance: row.advance || [], zero_three: row.zero_three || [] };
+        }
+
+        // Pontos somados de todos os stages já travados, por participante.
+        function totals() {
+            var tot = {};
+            state.stageOrder.forEach(function (id) {
+                var stage = state.stages[id];
+                if (!lockedStage(stage)) return;
+                (state.boards[id] || []).forEach(function (row) {
+                    var picks = rowPicks(row);
+                    if (picks) tot[row.user_id] = (tot[row.user_id] || 0) + score(picks, stage).points;
+                });
+            });
+            return tot;
+        }
+
+        function validModel(model) {
+            return !!(model && model.three_zero && model.advance && model.zero_three);
+        }
+
+        function modelTotal() {
+            var sum = 0;
+            state.stageOrder.forEach(function (id) {
+                var model = stageCfg(id).modelPicks;
+                if (lockedStage(state.stages[id]) && validModel(model)) sum += score(model, state.stages[id]).points;
+            });
+            return sum;
         }
 
         function pendingInvite() {
@@ -621,7 +744,9 @@
                 text.appendChild(document.createTextNode(' (' + fmtDate(state.stage.lock_at) + ', no seu horário).'));
             }
             var link = $('predLink');
-            if (CFG.predictionsPage) link.href = CFG.predictionsPage; else link.hidden = true;
+            var page = stageCfg(state.stageId).predictionsPage;
+            link.hidden = !page;
+            if (page) link.href = page;
         }
 
         // ---------- palpites ----------
@@ -703,8 +828,9 @@
             if (!complete()) return;
             var save = $('btnSave');
             save.disabled = true;
+            var sid = state.stageId, picks = state.picks;
             var row = {
-                user_id: state.user.id, stage_id: CFG.stageId,
+                user_id: state.user.id, stage_id: sid,
                 three_zero: state.picks.three_zero, zero_three: state.picks.zero_three, advance: state.picks.advance
             };
             var res = state.hasSaved
@@ -716,8 +842,13 @@
                 renderPicks();
                 return;
             }
-            state.hasSaved = true;
-            state.savedJson = picksJson(state.picks);
+            if (state.stageId === sid) {
+                state.hasSaved = true;
+                state.savedJson = picksJson(picks);
+            } else if (state.drafts[sid]) {
+                state.drafts[sid].hasSaved = true;
+                state.drafts[sid].savedJson = picksJson(picks);
+            }
             showMsg('picksMsg', 'Palpite salvo! Você pode alterar até a trava.', 'ok');
             renderPicks();
             loadBoard().then(renderBoard).catch(function () { /* o ranking atualiza na próxima leitura */ });
@@ -769,38 +900,54 @@
             leave.dataset.armed = '';
 
             var locked = isLocked();
+            var multi = multiStage();
+            var tot = multi ? totals() : {};
+            var byTotal = multi && state.sortBy === 'total';
             var head = $('boardHead'), body = $('boardBody');
             clear(head); clear(body);
             $('boardLegend').hidden = !locked;
+            $('sortToggle').hidden = !multi || !locked;
+            document.querySelectorAll('#sortToggle [data-sort]').forEach(function (button) {
+                button.setAttribute('aria-selected', button.dataset.sort === (byTotal ? 'total' : 'stage') ? 'true' : 'false');
+            });
+            var totalCell = function (userId) {
+                return multi ? el('td', { class: 'num pts', text: String(tot[userId] || 0) }) : null;
+            };
 
             if (!locked) {
-                $('boardHint').textContent = 'Os palpites de cada um ficam escondidos até o stage começar. Por enquanto dá para ver quem já enviou.';
-                head.appendChild(el('tr', null, el('th', { text: 'Participante' }), el('th', { text: 'Palpite' })));
-                state.board.forEach(function (row) {
+                $('boardHint').textContent = 'Os palpites de cada um ficam escondidos até o stage começar. Por enquanto dá para ver quem já enviou.'
+                    + (multi ? ' "Geral" soma os pontos dos stages já disputados.' : '');
+                head.appendChild(el('tr', null, el('th', { text: 'Participante' }), el('th', { text: 'Palpite' }),
+                    multi ? el('th', { class: 'num', text: 'Geral' }) : null));
+                var waiting = state.board.slice();
+                if (multi) waiting.sort(function (a, b) { return (tot[b.user_id] || 0) - (tot[a.user_id] || 0); });
+                waiting.forEach(function (row) {
                     var who = el('td', { class: 'who', text: row.display_name });
                     if (row.user_id === state.user.id) who.appendChild(el('span', { class: 'tag', text: 'você' }));
                     body.appendChild(el('tr', { class: row.user_id === state.user.id ? 'me' : '' }, who,
                         el('td', null, row.submitted
                             ? el('span', { class: 'chip hit', text: 'Enviado' })
-                            : el('span', { class: 'chip', text: 'Ainda não enviou' }))));
+                            : el('span', { class: 'chip', text: 'Ainda não enviou' })),
+                        totalCell(row.user_id)));
                 });
                 return;
             }
 
-            $('boardHint').textContent = 'Pontos = picks já confirmados. "Vivos" são os que ainda podem pontuar.';
+            $('boardHint').textContent = 'Pontos = picks já confirmados neste stage. "Vivos" são os que ainda podem pontuar.'
+                + (multi ? ' "Geral" soma todos os stages.' : '');
             head.appendChild(el('tr', null,
                 el('th', { class: 'num', text: '#' }), el('th', { text: 'Participante' }),
                 el('th', { class: 'num', text: 'Pontos' }), el('th', { class: 'num', text: 'Vivos' }),
+                multi ? el('th', { class: 'num', text: 'Geral' }) : null,
                 el('th', { text: 'Palpite' })));
 
             var rows = state.board.map(function (row) {
-                var picks = row.submitted
-                    ? { three_zero: row.three_zero || [], advance: row.advance || [], zero_three: row.zero_three || [] }
-                    : null;
+                var picks = rowPicks(row);
                 var s = picks ? score(picks) : { points: 0, live: 0 };
-                return { row: row, picks: picks, points: s.points, live: s.live };
+                return { row: row, picks: picks, points: s.points, live: s.live, total: tot[row.user_id] || 0 };
             });
             rows.sort(function (a, b) {
+                if (byTotal && b.total !== a.total) return b.total - a.total;
                 if (!!b.picks !== !!a.picks) return a.picks ? -1 : 1;
                 return (b.points - a.points) || (b.live - a.live)
                     || (new Date(a.row.updated_at || 0) - new Date(b.row.updated_at || 0));
@@ -811,14 +958,15 @@
                 var who = el('td', { class: 'who', text: item.row.display_name });
                 if (mine) who.appendChild(el('span', { class: 'tag', text: 'você' }));
                 body.appendChild(el('tr', { class: mine ? 'me' : '' },
-                    el('td', { class: 'num', text: item.picks ? String(index + 1) : '-' }), who,
+                    el('td', { class: 'num', text: (item.picks || byTotal) ? String(index + 1) : '-' }), who,
                     el('td', { class: 'num pts', text: String(item.points) }),
                     el('td', { class: 'num', text: item.picks ? String(item.live) : '-' }),
+                    totalCell(item.row.user_id),
                     el('td', null, item.picks ? chipList(item.picks) : el('span', { class: 'hint', text: 'Não enviou palpite' }))));
             });
 
-            var model = CFG.modelPicks;
-            if (model && model.three_zero && model.advance && model.zero_three) {
+            var model = stageCfg(state.stageId).modelPicks;
+            if (validModel(model)) {
                 var ms = score(model);
                 var who = el('td', { class: 'who', text: 'Modelo' });
                 who.appendChild(el('span', { class: 'tag', text: 'referência' }));
@@ -826,6 +974,7 @@
                     el('td', { class: 'num', text: '-' }), who,
                     el('td', { class: 'num pts', text: String(ms.points) }),
                     el('td', { class: 'num', text: String(ms.live) }),
+                    multi ? el('td', { class: 'num pts', text: String(modelTotal()) }) : null,
                     el('td', null, chipList(model))));
             }
         }
@@ -910,6 +1059,7 @@
 
         function renderAdmin() {
             if (!state.isAdmin) return;
+            $('adminTitle').textContent = 'Resultados · ' + stageLabel(state.stageId);
             var grid = $('adminGrid');
             clear(grid);
             state.stage.teams.forEach(function (team, index) {
@@ -944,11 +1094,13 @@
             if (!problem && isNaN(lock.getTime())) problem = 'Informe a data e a hora da trava.';
             if (problem) return showMsg('adminMsg', problem);
 
+            var sid = state.stageId;
             var res = await sb.from('stages').update({ results: results, lock_at: lock.toISOString() })
-                .eq('id', CFG.stageId).select('id,name,teams,lock_at,results');
+                .eq('id', sid).select('id,name,teams,lock_at,results');
             if (res.error) return showMsg('adminMsg', friendly(res.error));
             if (!res.data || !res.data.length) return showMsg('adminMsg', 'Você não tem permissão para gravar resultados.');
-            state.stage = res.data[0];
+            state.stages[sid] = res.data[0];
+            if (state.stageId === sid) state.stage = res.data[0];
             showMsg('adminMsg', 'Resultados salvos. O ranking já está atualizado.', 'ok');
             renderAll();
         }
@@ -1052,7 +1204,7 @@
             if (document.hidden || !state.stage) return;
             try {
                 var wasLocked = isLocked();
-                await loadStage();
+                await loadStages();
                 if (state.user && !state.recovering) {
                     await loadBoard();
                     if (state.tab !== 'admin') renderAll();
@@ -1086,13 +1238,16 @@
             $('btnCopy').addEventListener('click', copyInvite);
             $('btnLeave').addEventListener('click', leaveGroup);
             $('btnSaveResults').addEventListener('click', saveResults);
+            document.querySelectorAll('#sortToggle [data-sort]').forEach(function (button) {
+                button.addEventListener('click', function () { state.sortBy = button.dataset.sort; renderBoard(); });
+            });
             document.querySelectorAll('.tabs [data-tab]').forEach(function (button) {
                 button.addEventListener('click', function () { setTab(button.dataset.tab); });
             });
 
             // O listener é registrado antes de qualquer espera para não perder o
             // evento inicial; o tratamento aguarda o stage carregar.
-            var stageReady = loadStage();
+            var stageReady = loadStages();
             stageReady.catch(fail);
 
             sb.auth.onAuthStateChange(function (event, session) {
